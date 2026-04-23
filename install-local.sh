@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_ID="K-splash"
+PLUGIN_ID="K-Splash"
 DEFAULT_ARCHIVE="$SCRIPT_DIR/${PLUGIN_ID}.plasmoid"
 ARCHIVE_PATH="${1:-$DEFAULT_ARCHIVE}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"

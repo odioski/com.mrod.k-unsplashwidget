@@ -36,7 +36,7 @@ This excludes Git metadata, Codex files, and `contents/config/local.json`.
 Install a packaged widget locally with:
 
 ```bash
-./install-local.sh ./K-splash.plasmoid
+./install-local.sh ./K-Splash.plasmoid
 ```
 
 The installer uses `${XDG_DATA_HOME:-$HOME/.local/share}/plasma/plasmoids` and preserves an existing `contents/config/local.json` if you already have local secrets saved.
