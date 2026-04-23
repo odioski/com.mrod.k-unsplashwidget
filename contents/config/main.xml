@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <kcfg name="UnsplashWallpaperConfig">
   <group name="General">
+    <entry name="changeWallpaper" type="Bool">
+      <default>true</default>
+    </entry>
     <entry name="intervalMinutes" type="Int">
       <default>30</default>
     </entry>

@@ -259,9 +259,14 @@ PlasmoidItem {
                         attributionText = details.attributionMarkup;
                         currentDescription = details.description;
                         trackDownload(details.downloadLocation, accessKey);
-                        lastStatus = "Downloading image...";
-                        var cmd = Logic.buildCommand(details.imageUrl);
-                        exec.connectSource(cmd);
+                        if (plasmoid.configuration.changeWallpaper) {
+                            lastStatus = "Downloading image...";
+                            var cmd = Logic.buildCommand(details.imageUrl);
+                            exec.connectSource(cmd);
+                        } else {
+                            busy = false;
+                            lastStatus = "Photo loaded; enable wallpaper updates in settings";
+                        }
                     } catch (e) {
                         busy = false;
                         lastStatus = "Parse error: " + e;
