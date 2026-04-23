@@ -7,7 +7,7 @@
       }
     ],
     "Category": "Online Services",
-    "Id": "com.mrod.k-splash",
+    "Id": "K-splash",
     "Name": "K-Splash",
     "Description": "Auto-refresh KDE wallpaper from Unsplash",
     "Version": "1.0",

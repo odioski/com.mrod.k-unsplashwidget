@@ -74,7 +74,7 @@ PlasmoidItem {
             }
 
             Image {
-                source: Qt.resolvedUrl("../icons/com.mrod.k-splash.png")
+                source: Qt.resolvedUrl("../icons/K-splash.png")
                 anchors.centerIn: parent
                 width: 96
                 height: 96

@@ -139,7 +139,7 @@ function safeFileSegment(value) {
 function buildCommand(details) {
     var imageUrl = details && details.imageUrl ? details.imageUrl : "";
     var photoId = details && details.photoId ? details.photoId : "";
-    var filePath = "/tmp/k-unsplash-wallpaper-" + safeFileSegment(photoId) + ".jpg";
+    var filePath = "/tmp/k-splash-wallpaper-" + safeFileSegment(photoId) + ".jpg";
     var qdbusScript =
         "var Desktops = desktops(); " +
         "for (var i = 0; i < Desktops.length; i++) { " +
