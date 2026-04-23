@@ -62,6 +62,50 @@ Install a packaged widget locally with:
 
 The installer uses `${XDG_DATA_HOME:-$HOME/.local/share}/plasma/plasmoids` and still preserves a legacy `contents/config/local.json` if one already exists from an older install.
 
+## Snapcraft
+
+The project includes a Snapcraft definition at `snap/snapcraft.yaml`.
+
+- Base: `core24`
+- Confinement: `strict`
+- Target architectures: `amd64`, `arm64`, `armhf`
+
+Build locally in a clean provider (recommended):
+
+```bash
+snapcraft pack
+```
+
+Do not rely on `--destructive-mode` for release builds. It is host-OS specific and can fail when the host version does not match the base build environment.
+
+For upload-ready multi-architecture artifacts, use remote builders:
+
+```bash
+snapcraft remote-build --build-on=amd64,arm64,armhf
+```
+
+Or use the helper script:
+
+```bash
+./snap/build-for-store.sh
+```
+
+Release upload:
+
+```bash
+snapcraft upload --release=stable *.snap
+```
+
+User install flow (strict confinement):
+
+```bash
+sudo snap install k-splash
+sudo snap connect k-splash:dot-local-share-plasma-plasmoids
+k-splash.install-widget
+```
+
+This keeps builds reproducible for users across Linux distributions and avoids machine-specific build behavior.
+
 ## Publishing
 
 Files prepared for store upload:
