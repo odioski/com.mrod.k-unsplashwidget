@@ -16,9 +16,24 @@ The widget settings page includes:
 
 - `Unsplash Access Key`
 - `Category / query`
+- `Saved custom categories` for your own reusable queries
 - `Refresh interval (minutes)`
 - `Change wallpaper after each refresh`
 - target `Resolution width` and `Resolution height`
+
+## Local Secrets
+
+For local-only secrets, put them in `contents/config/local.json`.
+
+Example:
+
+```json
+{
+  "unsplashAccessKey": "your-unsplash-access-key"
+}
+```
+
+The widget reads this file as a fallback when the settings page access key is blank. A tracked example is available at `contents/config/local.example.json`.
 
 ## Package
 
@@ -29,6 +44,14 @@ Build a clean upload package with:
 ```
 
 This excludes Git metadata, Codex files, and `contents/config/local.json`.
+
+Install a packaged widget locally with:
+
+```bash
+./install-local.sh ./com.mrod.k-unsplashwidget.plasmoid
+```
+
+The installer uses `${XDG_DATA_HOME:-$HOME/.local/share}/plasma/plasmoids` and preserves an existing `contents/config/local.json` if you already have local secrets saved.
 
 ## Publishing
 

@@ -131,8 +131,15 @@ function shellQuote(value) {
     return "'" + String(value).replace(/'/g, "'\"'\"'") + "'";
 }
 
-function buildCommand(imageUrl) {
-    var filePath = "/tmp/k-unsplash-wallpaper.jpg";
+function safeFileSegment(value) {
+    var normalized = normalizedText(value).replace(/[^a-zA-Z0-9._-]+/g, "-");
+    return normalized.length > 0 ? normalized : "latest";
+}
+
+function buildCommand(details) {
+    var imageUrl = details && details.imageUrl ? details.imageUrl : "";
+    var photoId = details && details.photoId ? details.photoId : "";
+    var filePath = "/tmp/k-unsplash-wallpaper-" + safeFileSegment(photoId) + ".jpg";
     var qdbusScript =
         "var Desktops = desktops(); " +
         "for (var i = 0; i < Desktops.length; i++) { " +
@@ -140,9 +147,11 @@ function buildCommand(imageUrl) {
         "  d.wallpaperPlugin = 'org.kde.image'; " +
         "  d.currentConfigGroup = ['Wallpaper','org.kde.image','General']; " +
         "  d.writeConfig('Image','file://" + filePath + "'); " +
+        "  d.reloadConfig(); " +
         "}";
 
     var script =
+        "set -eu; " +
         "curl -fL " + shellQuote(imageUrl) + " -o " + shellQuote(filePath) +
         " && if command -v qdbus6 >/dev/null 2>&1; then QDBUS=qdbus6; " +
         "elif command -v qdbus >/dev/null 2>&1; then QDBUS=qdbus; " +

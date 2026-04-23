@@ -4,12 +4,51 @@ import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
 
 KCM.SimpleKCM {
+    property var defaultCategories: [
+        "dark",
+        "fun",
+        "skyline",
+        "happy",
+        "nature",
+        "city"
+    ]
+
     property alias cfg_changeWallpaper: wallpaperCheck.checked
     property alias cfg_intervalMinutes: intervalSpin.value
     property alias cfg_category: categoryCombo.editText
+    property alias cfg_customCategories: customCategoriesField.text
     property alias cfg_resolutionWidth: widthSpin.value
     property alias cfg_resolutionHeight: heightSpin.value
     property alias cfg_unsplashAccessKey: keyField.text
+
+    function parseCustomCategories(text) {
+        return text
+            .split(",")
+            .map(function(category) {
+                return category.trim();
+            })
+            .filter(function(category, index, categories) {
+                return category.length > 0 && categories.indexOf(category) === index;
+            });
+    }
+
+    function rebuildCategoryModel() {
+        var categories = defaultCategories.slice();
+        var customCategories = parseCustomCategories(customCategoriesField.text);
+        var currentCategory = categoryCombo.editText ? categoryCombo.editText.trim() : "";
+
+        for (var i = 0; i < customCategories.length; i++) {
+            if (categories.indexOf(customCategories[i]) === -1) {
+                categories.push(customCategories[i]);
+            }
+        }
+
+        if (currentCategory.length > 0 && categories.indexOf(currentCategory) === -1) {
+            categories.unshift(currentCategory);
+        }
+
+        categoryCombo.model = categories;
+    }
 
     Kirigami.FormLayout {
         CheckBox {
@@ -29,14 +68,15 @@ KCM.SimpleKCM {
             id: categoryCombo
             Kirigami.FormData.label: "Category / query"
             editable: true
-            model: [
-                "dark",
-                "fun",
-                "skyline",
-                "happy",
-                "nature",
-                "city"
-            ]
+            model: defaultCategories
+            onEditTextChanged: rebuildCategoryModel()
+        }
+
+        TextField {
+            id: customCategoriesField
+            Kirigami.FormData.label: "Saved custom categories"
+            placeholderText: "Comma-separated, for example: mountains, night city, minimal"
+            onTextChanged: rebuildCategoryModel()
         }
 
         SpinBox {
@@ -60,4 +100,6 @@ KCM.SimpleKCM {
             echoMode: TextInput.Password
         }
     }
+
+    Component.onCompleted: rebuildCategoryModel()
 }

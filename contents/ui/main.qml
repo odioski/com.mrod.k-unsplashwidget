@@ -27,7 +27,9 @@ PlasmoidItem {
         onNewData: function(sourceName, data) {
             var exitCode = data["exit code"];
             var stderr = data["stderr"];
-            lastStatus = exitCode === 0 ? "Wallpaper updated" : ("Error: " + stderr);
+            var stdout = data["stdout"];
+            var errorText = stderr || stdout || "Wallpaper update command failed";
+            lastStatus = exitCode === 0 ? "Wallpaper updated" : ("Error: " + errorText);
             busy = false;
             disconnectSource(sourceName);
         }
@@ -261,7 +263,7 @@ PlasmoidItem {
                         trackDownload(details.downloadLocation, accessKey);
                         if (plasmoid.configuration.changeWallpaper) {
                             lastStatus = "Downloading image...";
-                            var cmd = Logic.buildCommand(details.imageUrl);
+                            var cmd = Logic.buildCommand(details);
                             exec.connectSource(cmd);
                         } else {
                             busy = false;

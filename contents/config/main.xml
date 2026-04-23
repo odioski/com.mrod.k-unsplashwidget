@@ -10,6 +10,9 @@
     <entry name="category" type="String">
       <default>nature</default>
     </entry>
+    <entry name="customCategories" type="String">
+      <default></default>
+    </entry>
     <entry name="resolutionWidth" type="Int">
       <default>1920</default>
     </entry>
