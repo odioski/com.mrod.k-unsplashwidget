@@ -11,6 +11,13 @@ TARGET_DIR="$PLASMOID_ROOT/$PLUGIN_ID"
 TMP_DIR="$(mktemp -d)"
 RESTORE_LOCAL_CONFIG=0
 LOCAL_CONFIG_BACKUP="$TMP_DIR/local.json.backup"
+APT_RUNTIME_PACKAGE_GROUPS=(
+    "unzip"
+    "curl"
+    "qdbus-qt6 qdbus-qt5 qt6-tools-dev-tools qttools5-dev-tools"
+    "libcanberra-gtk3-module libcanberra-gtk-module"
+    "libcanberra0 libcanberra-gtk3-0"
+)
 
 cleanup() {
     rm -rf "$TMP_DIR"
@@ -18,10 +25,78 @@ cleanup() {
 
 trap cleanup EXIT
 
+install_apt_runtime_packages() {
+    local missing_packages=()
+    local group
+    local selected_package
+
+    for group in "${APT_RUNTIME_PACKAGE_GROUPS[@]}"; do
+        selected_package="$(select_apt_package $group)"
+
+        if [[ -z "$selected_package" ]]; then
+            echo "Warning: no installable apt package found for: $group" >&2
+            continue
+        fi
+
+        if ! dpkg -s "$selected_package" >/dev/null 2>&1; then
+            missing_packages+=("$selected_package")
+        fi
+    done
+
+    if [[ "${#missing_packages[@]}" -eq 0 ]]; then
+        return
+    fi
+
+    echo "Installing runtime packages with apt: ${missing_packages[*]}"
+
+    if [[ "$EUID" -eq 0 ]]; then
+        apt-get update
+        apt-get install -y "${missing_packages[@]}"
+        return
+    fi
+
+    if command -v sudo >/dev/null 2>&1; then
+        sudo apt-get update
+        sudo apt-get install -y "${missing_packages[@]}"
+        return
+    fi
+
+    echo "Missing apt packages: ${missing_packages[*]}" >&2
+    echo "Re-run as root or install them manually before installing $PLUGIN_ID." >&2
+    exit 1
+}
+
+apt_package_exists() {
+    local package="$1"
+    apt-cache show "$package" >/dev/null 2>&1
+}
+
+select_apt_package() {
+    local package
+
+    for package in "$@"; do
+        if dpkg -s "$package" >/dev/null 2>&1; then
+            printf '%s\n' "$package"
+            return 0
+        fi
+
+        if apt_package_exists "$package"; then
+            printf '%s\n' "$package"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 if [[ ! -f "$ARCHIVE_PATH" ]]; then
     echo "Archive not found: $ARCHIVE_PATH" >&2
     echo "Usage: $0 [/path/to/${PLUGIN_ID}.plasmoid]" >&2
     exit 1
+fi
+
+if command -v apt-get >/dev/null 2>&1; then
+    install_apt_runtime_packages
 fi
 
 if ! command -v unzip >/dev/null 2>&1; then

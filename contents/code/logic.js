@@ -30,8 +30,20 @@ function buildUnsplashRequestUrl(config) {
     return base + "?" + params.join("&");
 }
 
-function buildUnsplashUrl(config) {
-    return buildUnsplashRequestUrl(config);
+function buildBackendRequestUrl(baseUrl, config) {
+    var trimmedBaseUrl = normalizedText(baseUrl);
+    var params = [];
+    var category = normalizedText(config.category);
+
+    if (!trimmedBaseUrl) {
+        return "";
+    }
+
+    if (category.length > 0) {
+        params.push("query=" + encodeURIComponent(category));
+    }
+
+    return appendQueryParameters(trimmedBaseUrl, params);
 }
 
 function buildImageUrl(photo, config) {
@@ -127,6 +139,18 @@ function buildApiErrorMessage(responseText, status) {
     return message;
 }
 
+function shouldRetryImageDownload(errorText) {
+    var text = normalizedText(errorText);
+
+    if (!text) {
+        return false;
+    }
+
+    return /curl:\(22\)/.test(text)
+        || /requested url returned error:\s*(403|404|410|429)\b/i.test(text)
+        || /http\s*(403|404|410|429)\b/i.test(text);
+}
+
 function shellQuote(value) {
     return "'" + String(value).replace(/'/g, "'\"'\"'") + "'";
 }
@@ -136,10 +160,14 @@ function safeFileSegment(value) {
     return normalized.length > 0 ? normalized : "latest";
 }
 
+function buildTempFilePath(photoId) {
+    return "/tmp/K-Splash-wallpaper-" + safeFileSegment(photoId) + ".jpg";
+}
+
 function buildCommand(details) {
     var imageUrl = details && details.imageUrl ? details.imageUrl : "";
     var photoId = details && details.photoId ? details.photoId : "";
-    var filePath = "/tmp/K-Splash-wallpaper-" + safeFileSegment(photoId) + ".jpg";
+    var filePath = buildTempFilePath(photoId);
     var qdbusScript =
         "var Desktops = desktops(); " +
         "for (var i = 0; i < Desktops.length; i++) { " +
@@ -158,6 +186,43 @@ function buildCommand(details) {
         "else echo " + shellQuote("qdbus command not found") + " >&2; exit 127; fi" +
         " && \"$QDBUS\" org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
         + shellQuote(qdbusScript);
+
+    return "bash -c " + shellQuote(script);
+}
+
+function buildSavedFileName(details) {
+    var parts = ["K-Splash"];
+    var photoId = normalizedText(details && details.photoId);
+    var description = safeFileSegment(details && details.description ? details.description : "");
+
+    if (photoId.length > 0) {
+        parts.push(safeFileSegment(photoId));
+    }
+    if (description !== "latest") {
+        parts.push(description);
+    }
+
+    return parts.join("-") + ".jpg";
+}
+
+function buildSaveCopyCommand(sourcePath, targetDirectory, details) {
+    var safeSourcePath = normalizedText(sourcePath);
+    var safeTargetDirectory = normalizedText(targetDirectory);
+    var targetPath = safeTargetDirectory + "/" + buildSavedFileName(details);
+    var playSoundScript =
+        "if command -v canberra-gtk-play >/dev/null 2>&1; then " +
+        "canberra-gtk-play -i complete >/dev/null 2>&1 || true; " +
+        "elif command -v paplay >/dev/null 2>&1 && [ -f /usr/share/sounds/freedesktop/stereo/complete.oga ]; then " +
+        "paplay /usr/share/sounds/freedesktop/stereo/complete.oga >/dev/null 2>&1 || true; " +
+        "elif command -v aplay >/dev/null 2>&1 && [ -f /usr/share/sounds/alsa/Front_Center.wav ]; then " +
+        "aplay -q /usr/share/sounds/alsa/Front_Center.wav >/dev/null 2>&1 || true; " +
+        "fi";
+    var script =
+        "set -eu; " +
+        "mkdir -p " + shellQuote(safeTargetDirectory) +
+        " && cp " + shellQuote(safeSourcePath) + " " + shellQuote(targetPath) +
+        " && " + playSoundScript +
+        " && printf %s " + shellQuote(targetPath);
 
     return "bash -c " + shellQuote(script);
 }

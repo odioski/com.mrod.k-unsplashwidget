@@ -1,5 +1,6 @@
 import QtQuick 6.0
 import QtQuick.Controls 6.0
+import Qt5Compat.GraphicalEffects
 import org.kde.plasma.plasmoid 2.0
 import org.kde.plasma.core 2.0 as PlasmaCore
 import org.kde.plasma.plasma5support 2.0 as P5Support
@@ -14,8 +15,11 @@ PlasmoidItem {
     property string attributionText: ""
     property string currentDescription: ""
     property string lastStatus: ""
-    property string localAccessKey: ""
     property int remainingSeconds: plasmoid.configuration.intervalMinutes * 60
+    property string currentTempImagePath: ""
+    property string currentPhotoId: ""
+    property int currentRetryAttempt: 0
+    readonly property int maxImageRetryAttempts: 3
 
     Plasmoid.backgroundHints: PlasmaCore.Types.DefaultBackground | PlasmaCore.Types.ConfigurableBackground
 
@@ -29,8 +33,42 @@ PlasmoidItem {
             var stderr = data["stderr"];
             var stdout = data["stdout"];
             var errorText = stderr || stdout || "Wallpaper update command failed";
-            lastStatus = exitCode === 0 ? "Wallpaper updated" : ("Error: " + errorText);
-            busy = false;
+
+            if (exitCode === 0) {
+                lastStatus = "Wallpaper updated";
+                currentRetryAttempt = 0;
+                busy = false;
+            } else if (Logic.shouldRetryImageDownload(errorText)
+                    && currentRetryAttempt < maxImageRetryAttempts) {
+                currentTempImagePath = "";
+                lastStatus = "Image unavailable, trying another photo...";
+                refreshNow(currentRetryAttempt + 1, true);
+            } else {
+                lastStatus = "Error: " + errorText;
+                currentRetryAttempt = 0;
+                busy = false;
+            }
+
+            disconnectSource(sourceName);
+        }
+    }
+
+    P5Support.DataSource {
+        id: saveExec
+        engine: "executable"
+        connectedSources: []
+
+        onNewData: function(sourceName, data) {
+            var exitCode = data["exit code"];
+            var stderr = data["stderr"];
+            var stdout = data["stdout"];
+
+            if (exitCode === 0) {
+                lastStatus = "Saved wallpaper copy to " + String(stdout || "").trim();
+            } else {
+                lastStatus = "Save failed: " + (stderr || stdout || "Unable to copy wallpaper");
+            }
+
             disconnectSource(sourceName);
         }
     }
@@ -56,13 +94,15 @@ PlasmoidItem {
         width: parent.width - 16
 
         Rectangle {
+            id: iconCard
             width: 118
             height: 118
             anchors.horizontalCenter: parent.horizontalCenter
             radius: 10
             color: "#1a1f2b"
             border.width: 1
-            border.color: "#394055"
+            border.color: saveMouseArea.containsMouse && saveMouseArea.enabled ? "#7cc4ff" : "#394055"
+            scale: 1.0
 
             Rectangle {
                 anchors.fill: parent
@@ -73,13 +113,61 @@ PlasmoidItem {
                 border.color: "#262d3d"
             }
 
+            Rectangle {
+                id: flashOverlay
+                anchors.fill: parent
+                radius: 10
+                color: "#bfe6ff"
+                opacity: 0.0
+            }
+
             Image {
+                id: widgetIcon
                 source: Qt.resolvedUrl("../icons/K-Splash.png")
                 anchors.centerIn: parent
                 width: 96
                 height: 96
                 fillMode: Image.PreserveAspectFit
                 smooth: true
+            }
+
+            Glow {
+                anchors.fill: widgetIcon
+                source: widgetIcon
+                radius: 10
+                samples: 17
+                color: "#6bc8ff"
+                spread: 0.2
+                opacity: saveMouseArea.containsMouse && saveMouseArea.enabled ? 0.6 : 0.2
+            }
+
+            MouseArea {
+                id: saveMouseArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                enabled: plasmoid.configuration.enableSavedDownloads
+                    && currentTempImagePath.length > 0
+                    && !busy
+
+                onClicked: {
+                    pulseAnimation.restart();
+                    flashAnimation.restart();
+                    saveCurrentWallpaper();
+                }
+            }
+
+            SequentialAnimation {
+                id: pulseAnimation
+                NumberAnimation { target: iconCard; property: "scale"; to: 1.08; duration: 110 }
+                NumberAnimation { target: iconCard; property: "scale"; to: 0.98; duration: 90 }
+                NumberAnimation { target: iconCard; property: "scale"; to: 1.0; duration: 110 }
+            }
+
+            SequentialAnimation {
+                id: flashAnimation
+                NumberAnimation { target: flashOverlay; property: "opacity"; to: 0.4; duration: 70 }
+                NumberAnimation { target: flashOverlay; property: "opacity"; to: 0.0; duration: 180 }
             }
         }
 
@@ -95,7 +183,9 @@ PlasmoidItem {
         Text {
             text: busy
                 ? "Updating wallpaper..."
-                : "Auto-refresh KDE wallpaper\nfrom Unsplash"
+                : (plasmoid.configuration.enableSavedDownloads
+                    ? "Auto-refresh KDE wallpaper\nfrom Unsplash\nClick icon to save current wallpaper"
+                    : "Auto-refresh KDE wallpaper\nfrom Unsplash")
             font.pixelSize: 11
             color: "#c7d1e3"
             horizontalAlignment: Text.AlignHCenter
@@ -174,61 +264,52 @@ PlasmoidItem {
         currentDescription = "";
     }
 
-    function activeAccessKey() {
-        if (plasmoid.configuration.unsplashAccessKey
-                && plasmoid.configuration.unsplashAccessKey.length > 0) {
-            return plasmoid.configuration.unsplashAccessKey;
-        }
+    function saveCurrentWallpaper() {
+        var targetDirectory = plasmoid.configuration.downloadDirectory
+            ? String(plasmoid.configuration.downloadDirectory).trim()
+            : "";
 
-        return localAccessKey;
-    }
-
-    function loadLocalConfig() {
-        try {
-            var request = new XMLHttpRequest();
-            request.open("GET", Qt.resolvedUrl("../config/local.json"), false);
-            request.send();
-
-            if ((request.status !== 0 && request.status !== 200) || !request.responseText) {
-                return;
-            }
-
-            var json = JSON.parse(request.responseText);
-            if (json.unsplashAccessKey) {
-                localAccessKey = String(json.unsplashAccessKey).trim();
-            }
-        } catch (e) {
-            // Local config is optional.
-        }
-    }
-
-    function trackDownload(downloadLocation, accessKey) {
-        if (!downloadLocation || downloadLocation.length === 0) {
+        if (!plasmoid.configuration.enableSavedDownloads) {
+            lastStatus = "Enable saved downloads in settings";
             return;
         }
 
-        try {
-            var trackingRequest = new XMLHttpRequest();
-            trackingRequest.open("GET", downloadLocation);
-            trackingRequest.setRequestHeader("Accept-Version", "v1");
-            trackingRequest.setRequestHeader("Authorization", "Client-ID " + accessKey);
-            trackingRequest.send();
-        } catch (e) {
-            // Download tracking is advisory; wallpaper updates should continue.
+        if (!targetDirectory || targetDirectory.length === 0) {
+            lastStatus = "Set a download folder in settings";
+            return;
         }
+
+        if (!currentTempImagePath || currentTempImagePath.length === 0) {
+            lastStatus = "Refresh a wallpaper before saving it";
+            return;
+        }
+
+        lastStatus = "Saving wallpaper copy...";
+        var command = Logic.buildSaveCopyCommand(currentTempImagePath, targetDirectory, {
+            photoId: currentPhotoId,
+            description: currentDescription
+        });
+        saveExec.connectSource(command);
     }
 
-    function refreshNow() {
-        var accessKey = activeAccessKey();
+    function refreshNow(retryAttempt, preserveCountdown) {
+        var backendUrl = plasmoid.configuration.backendUrl
+            ? String(plasmoid.configuration.backendUrl).trim()
+            : "";
+        var nextRetryAttempt = retryAttempt || 0;
+        var keepCountdown = preserveCountdown === true;
 
-        if (!accessKey || accessKey.length === 0) {
-            lastStatus = "Set Unsplash Access Key in settings";
+        if (!backendUrl || backendUrl.length === 0) {
+            lastStatus = "Set backend URL in settings";
             return;
         }
 
         busy = true;
-        lastStatus = "Contacting Unsplash...";
-        remainingSeconds = plasmoid.configuration.intervalMinutes * 60;
+        currentRetryAttempt = nextRetryAttempt;
+        lastStatus = "Contacting backend...";
+        if (!keepCountdown) {
+            remainingSeconds = plasmoid.configuration.intervalMinutes * 60;
+        }
 
         var config = {
             category: plasmoid.configuration.category,
@@ -236,12 +317,10 @@ PlasmoidItem {
             resolutionHeight: plasmoid.configuration.resolutionHeight
         };
 
-        var url = Logic.buildUnsplashRequestUrl(config);
+        var url = Logic.buildBackendRequestUrl(backendUrl, config);
 
         var xhr = new XMLHttpRequest();
         xhr.open("GET", url);
-        xhr.setRequestHeader("Accept-Version", "v1");
-        xhr.setRequestHeader("Authorization", "Client-ID " + accessKey);
 
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
@@ -260,22 +339,27 @@ PlasmoidItem {
 
                         attributionText = details.attributionMarkup;
                         currentDescription = details.description;
-                        trackDownload(details.downloadLocation, accessKey);
+                        currentPhotoId = details.photoId;
                         if (plasmoid.configuration.changeWallpaper) {
+                            currentTempImagePath = Logic.buildTempFilePath(details.photoId);
                             lastStatus = "Downloading image...";
                             var cmd = Logic.buildCommand(details);
                             exec.connectSource(cmd);
                         } else {
+                            currentTempImagePath = "";
                             busy = false;
+                            currentRetryAttempt = 0;
                             lastStatus = "Photo loaded; enable wallpaper updates in settings";
                         }
                     } catch (e) {
                         busy = false;
+                        currentRetryAttempt = 0;
                         lastStatus = "Parse error: " + e;
                         clearPhotoDetails();
                     }
                 } else {
                     busy = false;
+                    currentRetryAttempt = 0;
                     lastStatus = Logic.buildApiErrorMessage(xhr.responseText, xhr.status);
                     clearPhotoDetails();
                 }
@@ -286,7 +370,6 @@ PlasmoidItem {
     }
 
     Component.onCompleted: {
-        loadLocalConfig();
         remainingSeconds = plasmoid.configuration.intervalMinutes * 60;
     }
 }

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtCore
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
 
@@ -19,7 +20,10 @@ KCM.SimpleKCM {
     property alias cfg_customCategories: customCategoriesField.text
     property alias cfg_resolutionWidth: widthSpin.value
     property alias cfg_resolutionHeight: heightSpin.value
-    property alias cfg_unsplashAccessKey: keyField.text
+    property alias cfg_backendUrl: backendUrlField.text
+    property alias cfg_enableSavedDownloads: saveDownloadCheck.checked
+    property alias cfg_downloadDirectory: downloadDirectoryField.text
+    readonly property string defaultPicturesPath: StandardPaths.writableLocation(StandardPaths.PicturesLocation)
 
     function parseCustomCategories(text) {
         return text
@@ -94,10 +98,24 @@ KCM.SimpleKCM {
         }
 
         TextField {
-            id: keyField
-            Kirigami.FormData.label: "Unsplash Access Key"
-            placeholderText: "Paste your Unsplash API access key"
-            echoMode: TextInput.Password
+            id: backendUrlField
+            Kirigami.FormData.label: "Backend URL"
+            placeholderText: "http://diskstation:8787/api/random-photo"
+        }
+
+        CheckBox {
+            id: saveDownloadCheck
+            Kirigami.FormData.label: "Saved downloads"
+            text: "Enable saving the current wallpaper from the widget icon"
+        }
+
+        TextField {
+            Kirigami.FormData.label: "Download folder"
+            enabled: saveDownloadCheck.checked
+            id: downloadDirectoryField
+            placeholderText: defaultPicturesPath.length > 0
+                ? defaultPicturesPath
+                : "/home/user/Pictures/K-Splash"
         }
     }
 
